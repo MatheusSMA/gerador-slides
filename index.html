@@ -197,21 +197,16 @@
       </div>
     </div>
 
-    <div class="row2">
-      <div class="field">
-        <label class="label" for="imgsrc">Fonte das imagens</label>
-        <select id="imgsrc">
-          <option value="pollinations">Pollinations (IA, catálogo)</option>
-          <option value="wikipedia">Wikipedia (foto enciclopédica)</option>
-          <option value="pixabay">Pixabay (fotos reais)</option>
-          <option value="none">Sem imagens</option>
-        </select>
-      </div>
-      <div class="field">
-        <label class="label" for="fname">Nome do arquivo</label>
-        <input id="fname" type="text" placeholder="meu-deck" autocomplete="off">
-      </div>
+    <div class="field">
+      <label class="label" for="fname">Nome do arquivo</label>
+      <input id="fname" type="text" placeholder="meu-deck" autocomplete="off">
     </div>
+
+    <div class="field" style="display: flex; align-items: center; gap: 10px;">
+      <input type="checkbox" id="noimg" style="width: auto; transform: scale(1.3);">
+      <label for="noimg" style="font-size: 14px; cursor: pointer; user-select: none;">Gerar sem imagens (só palavras)</label>
+    </div>
+    <input type="hidden" id="imgsrc" value="pollinations">
 
     <button id="go" class="btn-primary">Gerar palavras e imagens</button>
   </div>
@@ -270,12 +265,21 @@ const log = (...a) => { $('log').textContent += '\n' + a.join(' '); $('log').scr
 const clearLog = () => { $('log').textContent = ''; };
 
 // ---------- Persist ----------
-['tema','fonte','imgsrc','lang','fname'].forEach(id => {
+localStorage.removeItem('ppt_imgsrc'); // legado
+['tema','fonte','lang','fname'].forEach(id => {
   const v = localStorage.getItem('ppt_' + id);
   if (v !== null) $(id).value = v;
   $(id).addEventListener('input', () => localStorage.setItem('ppt_' + id, $(id).value));
   $(id).addEventListener('change', () => localStorage.setItem('ppt_' + id, $(id).value));
 });
+
+const noImgChk = $('noimg');
+noImgChk.checked = localStorage.getItem('ppt_noimg') === '1';
+noImgChk.addEventListener('change', () => {
+  localStorage.setItem('ppt_noimg', noImgChk.checked ? '1' : '0');
+  $('imgsrc').value = noImgChk.checked ? 'none' : 'pollinations';
+});
+$('imgsrc').value = noImgChk.checked ? 'none' : 'pollinations';
 
 // ---------- Quantity toggle ----------
 let qtd = parseInt(localStorage.getItem('ppt_qtd') || '25', 10);
@@ -610,14 +614,58 @@ function blobToDataURL(blob) {
 
 let pasteTargetIdx = null;
 
-function openPasteModal(idx) {
+async function tryClipboardAuto(idx) {
+  if (!navigator.clipboard || !navigator.clipboard.read) return false;
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imgType = item.types.find(t => t.startsWith('image/'));
+      if (imgType) {
+        const blob = await item.getType(imgType);
+        const dataUrl = await blobToDataURL(blob);
+        state.words[idx].image = dataUrl;
+        renderPreview();
+        return true;
+      }
+      // alguns navegadores expõem URL como text/uri-list ou text/plain
+      if (item.types.includes('text/plain')) {
+        const blob = await item.getType('text/plain');
+        const txt = (await blob.text()).trim();
+        if (/^https?:\/\/.+\.(jpe?g|png|gif|webp|bmp|svg)/i.test(txt) || /^data:image\//i.test(txt)) {
+          try {
+            const dataUrl = txt.startsWith('data:') ? txt : await tryFetchAsImage(txt);
+            state.words[idx].image = dataUrl;
+            renderPreview();
+            return true;
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+  return false;
+}
+
+async function openPasteModal(idx) {
   pasteTargetIdx = idx;
+  // Tenta pegar do clipboard automaticamente (gesto do toque ainda é válido)
+  if (await tryClipboardAuto(idx)) {
+    pasteTargetIdx = null;
+    return;
+  }
+  // Fallback: modal manual
   const it = state.words[idx];
   $('pasteWord').innerHTML = `Imagem para <strong>"${escapeHtml(it.pt)}"</strong>. Toque na área abaixo, depois <strong>toque e segure</strong> e escolha <strong>Colar</strong>. No computador use <strong>Ctrl+V</strong>.`;
   const target = $('pasteTarget');
   target.innerHTML = 'cole aqui';
   $('pasteModal').classList.add('show');
-  setTimeout(() => target.focus(), 50);
+  setTimeout(() => {
+    target.focus();
+    // Selecionar o conteúdo placeholder pra facilitar substituição no paste
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+  }, 50);
 }
 
 function closePasteModal() {
