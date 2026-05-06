@@ -104,6 +104,30 @@
   .corner-btn:hover, .corner-btn:active { background: var(--danger); }
   .corner-btn.card-rm { top: 4px; right: 4px; background: rgba(220,38,38,.85); }
   .corner-btn.card-rm:hover { background: var(--danger); }
+
+  /* Paste modal */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+    display: none; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 14px; padding: 18px;
+    max-width: 440px; width: 100%; box-shadow: var(--shadow);
+  }
+  .modal h3 { margin: 0 0 6px; font-size: 17px; }
+  .modal p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+  .paste-target {
+    min-height: 140px; border: 2px dashed var(--accent);
+    border-radius: 10px; padding: 16px; font-size: 14px;
+    background: var(--soft); color: var(--muted); text-align: center;
+    display: flex; align-items: center; justify-content: center;
+    outline: none; cursor: text;
+    -webkit-user-select: text; user-select: text;
+  }
+  .paste-target:focus { background: color-mix(in srgb, var(--accent) 8%, var(--card)); color: var(--fg); }
+  .paste-target img { max-width: 100%; max-height: 200px; border-radius: 6px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
   .pv-word, .pv-img {
     aspect-ratio: 16/9; border-radius: 8px; background: #fff;
     display: flex; align-items: center; justify-content: center;
@@ -226,6 +250,17 @@
 </div>
 
 <input type="file" id="fileInput" class="upload-input" accept="image/*">
+
+<div class="modal-bg" id="pasteModal">
+  <div class="modal">
+    <h3>Colar imagem aqui 📋</h3>
+    <p id="pasteWord">Toque na área abaixo, depois <strong>toque e segure</strong> e escolha <strong>Colar</strong>. No computador use <strong>Ctrl+V</strong>.</p>
+    <div id="pasteTarget" class="paste-target" contenteditable="true">cole aqui</div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="pasteCancel">Cancelar</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const PIXABAY_KEY = '55733113-22d5ff46c22eb109960c0ccee';
@@ -567,30 +602,111 @@ async function refetchFromSource(idx, src) {
   }
 }
 
-async function pasteImageToSlot(idx) {
-  if (!navigator.clipboard || !navigator.clipboard.read) {
-    alert('Seu navegador não permite ler a área de transferência. Use o botão Upload.');
-    return;
-  }
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob);
+  });
+}
+
+let pasteTargetIdx = null;
+
+function openPasteModal(idx) {
+  pasteTargetIdx = idx;
+  const it = state.words[idx];
+  $('pasteWord').innerHTML = `Imagem para <strong>"${escapeHtml(it.pt)}"</strong>. Toque na área abaixo, depois <strong>toque e segure</strong> e escolha <strong>Colar</strong>. No computador use <strong>Ctrl+V</strong>.`;
+  const target = $('pasteTarget');
+  target.innerHTML = 'cole aqui';
+  $('pasteModal').classList.add('show');
+  setTimeout(() => target.focus(), 50);
+}
+
+function closePasteModal() {
+  $('pasteModal').classList.remove('show');
+  pasteTargetIdx = null;
+}
+
+async function applyPastedImage(dataUrl) {
+  if (pasteTargetIdx === null) return;
+  state.words[pasteTargetIdx].image = dataUrl;
+  closePasteModal();
+  renderPreview();
+}
+
+async function tryFetchAsImage(url) {
   try {
-    const items = await navigator.clipboard.read();
-    for (const item of items) {
-      const imgType = item.types.find(t => t.startsWith('image/'));
-      if (imgType) {
-        const blob = await item.getType(imgType);
-        const dataUrl = await new Promise((res, rej) => {
-          const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob);
-        });
-        state.words[idx].image = dataUrl;
-        renderPreview();
+    const r = await fetch(url, { mode: 'cors' });
+    if (!r.ok) throw new Error('http ' + r.status);
+    const blob = await r.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('não é imagem');
+    return await blobToDataURL(blob);
+  } catch (e) {
+    throw e;
+  }
+}
+
+$('pasteCancel').addEventListener('click', closePasteModal);
+$('pasteModal').addEventListener('click', e => { if (e.target.id === 'pasteModal') closePasteModal(); });
+
+$('pasteTarget').addEventListener('paste', async e => {
+  e.preventDefault();
+  const cd = e.clipboardData;
+  if (!cd) return;
+
+  // 1) Imagem como arquivo (caso típico de "Copiar imagem" no Chrome desktop)
+  for (const it of cd.items || []) {
+    if (it.kind === 'file' && it.type.startsWith('image/')) {
+      const blob = it.getAsFile();
+      if (blob) { applyPastedImage(await blobToDataURL(blob)); return; }
+    }
+  }
+
+  // 2) HTML colado (iOS Safari quase sempre cai aqui — vem com <img src="...">)
+  const html = cd.getData('text/html');
+  if (html) {
+    const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (m) {
+      const url = m[1];
+      // data: já é local; fetch direto
+      if (url.startsWith('data:')) { applyPastedImage(url); return; }
+      const target = $('pasteTarget');
+      target.textContent = 'baixando imagem...';
+      try {
+        applyPastedImage(await tryFetchAsImage(url));
+        return;
+      } catch (err) {
+        target.innerHTML = 'Falha ao baixar a imagem (CORS bloqueou).<br>Salva ela na galeria primeiro e usa <strong>📁 Upload</strong>.';
         return;
       }
     }
-    alert('Nenhuma imagem na área de transferência. Copie uma imagem primeiro (segurar no celular → Copiar).');
-  } catch (e) {
-    alert('Não foi possível ler a área de transferência: ' + e.message + '\n\nDica: o navegador pode pedir permissão na primeira vez.');
   }
-}
+
+  // 3) Texto puro com URL
+  const txt = cd.getData('text/plain');
+  if (txt) {
+    const url = txt.trim();
+    if (/^https?:\/\/.+\.(jpe?g|png|gif|webp|bmp|svg)/i.test(url) || /^data:image\//i.test(url)) {
+      const target = $('pasteTarget');
+      target.textContent = 'baixando imagem...';
+      try {
+        applyPastedImage(url.startsWith('data:') ? url : await tryFetchAsImage(url));
+        return;
+      } catch {
+        target.innerHTML = 'Falha ao baixar a URL (CORS).<br>Salva a imagem na galeria primeiro e usa <strong>📁 Upload</strong>.';
+        return;
+      }
+    }
+  }
+
+  $('pasteTarget').innerHTML = 'Nenhuma imagem detectada na área de transferência.<br>Tenta copiar a imagem de novo (segurar → Copiar imagem).';
+});
+
+// Drop também funciona no contenteditable
+$('pasteTarget').addEventListener('drop', async e => {
+  e.preventDefault();
+  const f = e.dataTransfer?.files?.[0];
+  if (f && f.type.startsWith('image/')) applyPastedImage(await blobToDataURL(f));
+});
+$('pasteTarget').addEventListener('dragover', e => e.preventDefault());
 
 $('previewGrid').addEventListener('click', e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
@@ -604,7 +720,7 @@ $('previewGrid').addEventListener('click', e => {
     pendingIdx = idx;
     $('fileInput').click();
   } else if (act === 'paste') {
-    pasteImageToSlot(idx);
+    openPasteModal(idx);
   } else if (act === 'rmimg') {
     it.image = null; renderPreview();
   } else if (act === 'rmall') {
