@@ -248,11 +248,17 @@
 
 <div class="modal-bg" id="pasteModal">
   <div class="modal">
-    <h3>Colar imagem aqui 📋</h3>
-    <p id="pasteWord">Toque na área abaixo, depois <strong>toque e segure</strong> e escolha <strong>Colar</strong>. No computador use <strong>Ctrl+V</strong>.</p>
+    <h3>Colar imagem 📋</h3>
+    <p id="pasteWord">Toque na área abaixo e <strong>cole</strong> (toque e segure → Colar). No PC: <strong>Ctrl+V</strong>.</p>
     <div id="pasteTarget" class="paste-target" contenteditable="true">cole aqui</div>
+    <p style="margin: 12px 0 0; font-size: 12px; line-height: 1.5;">
+      <strong>📱 No iPad/iPhone</strong>, o caminho mais confiável é:
+      no Safari, segurar a imagem → <strong>Adicionar a Fotos</strong>,
+      depois usar o botão <strong>📁 Upload</strong> aqui.
+    </p>
     <div class="modal-actions">
       <button class="btn-ghost" id="pasteCancel">Cancelar</button>
+      <button class="btn-secondary" id="pasteUpload">📁 Upload em vez disso</button>
     </div>
   </div>
 </div>
@@ -693,6 +699,11 @@ async function tryFetchAsImage(url) {
 }
 
 $('pasteCancel').addEventListener('click', closePasteModal);
+$('pasteUpload').addEventListener('click', () => {
+  const idx = pasteTargetIdx;
+  closePasteModal();
+  if (idx !== null) { pendingIdx = idx; $('fileInput').click(); }
+});
 $('pasteModal').addEventListener('click', e => { if (e.target.id === 'pasteModal') closePasteModal(); });
 
 $('pasteTarget').addEventListener('paste', async e => {
