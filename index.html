@@ -459,9 +459,9 @@ async function imagePixabay(wordPT, key, wordEN) {
 }
 
 async function imagePollinations(word) {
-  const prompt = `professional product catalog photography of a single ${word}, isolated on pure white background, ecommerce style, soft even studio lighting, no shadow, centered, full object visible, no text, no watermark, no logo, no people, no hands, photorealistic, high detail`;
-  const negative = 'cartoon,illustration,drawing,icon,sketch,painting,multiple objects,collage,text,watermark,logo,hands,people';
-  const base = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&nologo=true&enhance=true&negative=' + encodeURIComponent(negative);
+  const prompt = `product catalog photo of a single ${word}, isolated on pure white background, studio lighting, centered, no text, no watermark, no people, photorealistic`;
+  const negative = 'cartoon,illustration,drawing,icon,sketch,painting,collage,text,watermark,logo,hands,people';
+  const base = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=768&height=768&nologo=true&negative=' + encodeURIComponent(negative);
   let wait = 2500;
   for (let attempt = 0; attempt < 5; attempt++) {
     const u = base + '&seed=' + Math.floor(Math.random() * 1e9);
@@ -875,7 +875,7 @@ $('go').addEventListener('click', async () => {
   if (imgsrc !== 'none') {
     setPhase('Buscando imagens...');
     progState.start = Date.now(); setProgress(0, words.length);
-    const concurrency = imgsrc === 'pollinations' ? 1 : (imgsrc === 'wikipedia' ? 4 : 3);
+    const concurrency = imgsrc === 'pollinations' ? 3 : (imgsrc === 'wikipedia' ? 4 : 3);
     await pool(words, async (w, i) => {
       log('  ['+(i+1)+'/'+words.length+'] '+w);
       const img = await getImage(w, imgsrc, PIXABAY_KEY, wordsEN[i]);
