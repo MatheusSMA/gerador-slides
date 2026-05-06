@@ -563,6 +563,21 @@ async function imageWikimediaCommons(wordPT, wordEN, themeEN) {
   throw new Error('wikimedia sem resultado');
 }
 
+const DDG_PROXY = 'https://gerador-img.matheusjut.workers.dev';
+
+async function imageDDG(wordPT, wordEN, themeEN) {
+  const term = (wordEN || wordPT) + (themeEN ? ' ' + themeEN : '');
+  const url = DDG_PROXY + '/?q=' + encodeURIComponent(term);
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) throw new Error('ddg ' + r.status);
+  const blob = await r.blob();
+  if (!blob.type.startsWith('image/')) throw new Error('not image');
+  log('    "'+wordPT+'" → ddg: ' + (r.headers.get('X-Source-Url') || '').slice(0, 60));
+  return await new Promise((res, rej) => {
+    const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob);
+  });
+}
+
 async function imageOpenverse(wordPT, wordEN) {
   const term = wordEN || wordPT;
   try {
@@ -588,6 +603,7 @@ async function imageWikipedia(wordPT, wordEN, themeEN) {
 async function getImage(word, src, key, wordEN, themeEN) {
   if (src === 'none') return null;
   if (src === 'auto') {
+    try { return await imageDDG(word, wordEN, themeEN); } catch {}
     try { return await imageWikimediaCommons(word, wordEN, themeEN); } catch {}
     try { return await imagePixabay(word, key, wordEN); } catch {}
     try { return await imageOpenverse(word, wordEN); } catch { log('  "'+word+'" sem fonte real — IA'); }
