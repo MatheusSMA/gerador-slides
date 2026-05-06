@@ -208,6 +208,18 @@
     </div>
     <input type="hidden" id="imgsrc" value="pollinations">
 
+    <details style="margin: -4px 0 14px;">
+      <summary style="cursor: pointer; font-size: 13px; color: var(--muted); user-select: none;">⚙️ Avançado (token Pollinations)</summary>
+      <div class="field" style="margin-top: 10px;">
+        <label class="label" for="poltoken">Token Pollinations (opcional, mais rápido)</label>
+        <input id="poltoken" type="text" placeholder="cole o token de enter.pollinations.ai" autocomplete="off" spellcheck="false">
+        <div style="font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.4;">
+          Sem token: Tier 1 (rápido). Com token: Tier 2 (~3× mais rápido).
+          Crie conta grátis em <a href="https://enter.pollinations.ai" target="_blank" style="color: var(--accent);">enter.pollinations.ai</a>.
+        </div>
+      </div>
+    </details>
+
     <button id="go" class="btn-primary">Gerar palavras e imagens</button>
   </div>
 
@@ -272,7 +284,7 @@ const clearLog = () => { $('log').textContent = ''; };
 
 // ---------- Persist ----------
 localStorage.removeItem('ppt_imgsrc'); // legado
-['tema','fonte','lang','fname'].forEach(id => {
+['tema','fonte','lang','fname','poltoken'].forEach(id => {
   const v = localStorage.getItem('ppt_' + id);
   if (v !== null) $(id).value = v;
   $(id).addEventListener('input', () => localStorage.setItem('ppt_' + id, $(id).value));
@@ -327,6 +339,10 @@ function startProgress() { progState.start = Date.now(); setProgress(0, 0); $('e
 
 // ---------- Pollinations (text) ----------
 const POLLINATIONS_REFERRER = 'gerador-slides';
+function polAuthSuffix() {
+  const t = ($('poltoken').value || '').trim();
+  return t ? ('&token=' + encodeURIComponent(t) + '&referrer=' + POLLINATIONS_REFERRER) : ('&referrer=' + POLLINATIONS_REFERRER);
+}
 
 async function askPollinations(prompt) {
   const models = ['openai', 'mistral', 'llama', 'openai-fast'];
@@ -334,7 +350,7 @@ async function askPollinations(prompt) {
   for (let i = 0; i < 8; i++) {
     const model = models[i % models.length];
     const seed = Math.floor(Math.random() * 1e9);
-    const url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=' + model + '&seed=' + seed + '&referrer=' + POLLINATIONS_REFERRER;
+    const url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=' + model + '&seed=' + seed + polAuthSuffix();
     try {
       const r = await fetch(url, { cache: 'no-store' });
       if (r.ok) { const t = await r.text(); if (t && t.length > 5) return t; }
@@ -463,7 +479,7 @@ async function imagePixabay(wordPT, key, wordEN) {
 async function imagePollinations(word) {
   const prompt = `product catalog photo of a single ${word}, isolated on pure white background, studio lighting, centered, no text, no watermark, no people, photorealistic`;
   const negative = 'cartoon,illustration,drawing,icon,sketch,painting,collage,text,watermark,logo,hands,people';
-  const base = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=768&height=768&nologo=true&referrer=' + POLLINATIONS_REFERRER + '&negative=' + encodeURIComponent(negative);
+  const base = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=768&height=768&nologo=true' + polAuthSuffix() + '&negative=' + encodeURIComponent(negative);
   let wait = 2500;
   for (let attempt = 0; attempt < 5; attempt++) {
     const u = base + '&seed=' + Math.floor(Math.random() * 1e9);
