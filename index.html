@@ -206,7 +206,7 @@
       <input type="checkbox" id="noimg" style="width: auto; transform: scale(1.3);">
       <label for="noimg" style="font-size: 14px; cursor: pointer; user-select: none;">Gerar sem imagens (só palavras)</label>
     </div>
-    <input type="hidden" id="imgsrc" value="pollinations">
+    <input type="hidden" id="imgsrc" value="auto">
 
     <details style="margin: -4px 0 14px;">
       <summary style="cursor: pointer; font-size: 13px; color: var(--muted); user-select: none;">⚙️ Avançado (token Pollinations)</summary>
@@ -295,9 +295,9 @@ const noImgChk = $('noimg');
 noImgChk.checked = localStorage.getItem('ppt_noimg') === '1';
 noImgChk.addEventListener('change', () => {
   localStorage.setItem('ppt_noimg', noImgChk.checked ? '1' : '0');
-  $('imgsrc').value = noImgChk.checked ? 'none' : 'pollinations';
+  $('imgsrc').value = noImgChk.checked ? 'none' : 'auto';
 });
-$('imgsrc').value = noImgChk.checked ? 'none' : 'pollinations';
+$('imgsrc').value = noImgChk.checked ? 'none' : 'auto';
 
 // ---------- Quantity toggle ----------
 let qtd = parseInt(localStorage.getItem('ppt_qtd') || '25', 10);
@@ -522,6 +522,11 @@ async function imageWikipedia(wordPT, wordEN) {
 
 async function getImage(word, src, key, wordEN) {
   if (src === 'none') return null;
+  if (src === 'auto') {
+    try { return await imageWikipedia(word, wordEN); } catch {}
+    try { return await imagePixabay(word, key, wordEN); } catch (e) { log('  "'+word+'" sem wiki/pix — IA'); }
+    return await imagePollinations(wordEN || word);
+  }
   if (src === 'wikipedia') {
     try { return await imageWikipedia(word, wordEN); }
     catch { log('  wiki falhou para "'+word+'" — Pollinations'); return await imagePollinations(wordEN || word); }
@@ -896,7 +901,7 @@ $('go').addEventListener('click', async () => {
   if (imgsrc !== 'none') {
     setPhase('Buscando imagens...');
     progState.start = Date.now(); setProgress(0, words.length);
-    const concurrency = imgsrc === 'pollinations' ? 3 : (imgsrc === 'wikipedia' ? 4 : 3);
+    const concurrency = imgsrc === 'pollinations' ? 3 : (imgsrc === 'wikipedia' || imgsrc === 'auto' ? 4 : 3);
     await pool(words, async (w, i) => {
       log('  ['+(i+1)+'/'+words.length+'] '+w);
       const img = await getImage(w, imgsrc, PIXABAY_KEY, wordsEN[i]);
