@@ -568,14 +568,18 @@ const DDG_PROXY = 'https://gerador-img.matheusjut.workers.dev';
 async function imageDDG(wordPT, wordEN, themeEN) {
   const term = (wordEN || wordPT) + (themeEN ? ' ' + themeEN : '');
   const url = DDG_PROXY + '/?q=' + encodeURIComponent(term);
-  const r = await fetch(url, { cache: 'no-store' });
-  if (!r.ok) throw new Error('ddg ' + r.status);
-  const blob = await r.blob();
-  if (!blob.type.startsWith('image/')) throw new Error('not image');
-  log('    "'+wordPT+'" → ddg: ' + (r.headers.get('X-Source-Url') || '').slice(0, 60));
-  return await new Promise((res, rej) => {
-    const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob);
-  });
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const r = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!r.ok) throw new Error('ddg ' + r.status);
+    const blob = await r.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('not image');
+    log('    "'+wordPT+'" → ddg: ' + (r.headers.get('X-Source-Url') || '').slice(0, 50));
+    return await new Promise((res, rej) => {
+      const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob);
+    });
+  } finally { clearTimeout(tm); }
 }
 
 async function imageOpenverse(wordPT, wordEN) {
