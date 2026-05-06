@@ -505,26 +505,71 @@ async function imagePollinations(word) {
   throw new Error('pollinations img falhou');
 }
 
-async function imageWikipedia(wordPT, wordEN) {
-  const tries = [{ lang: 'en', term: wordEN || wordPT }, { lang: 'pt', term: wordPT }];
-  for (const t of tries) {
-    if (!t.term) continue;
+async function imageWikimediaCommons(wordPT, wordEN) {
+  const queries = [];
+  if (wordEN && wordEN !== wordPT) queries.push(wordEN);
+  if (wordPT) queries.push(wordPT);
+  for (const q of queries) {
     try {
-      const u = `https://${t.lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t.term.replace(/\s+/g,'_'))}`;
-      const r = await fetch(u); if (!r.ok) continue;
+      const params = new URLSearchParams({
+        action: 'query', format: 'json',
+        generator: 'search',
+        gsrsearch: 'filetype:bitmap ' + q,
+        gsrlimit: '20',
+        gsrnamespace: '6',
+        prop: 'imageinfo',
+        iiprop: 'url|size|mime',
+        iiurlwidth: '1280',
+        origin: '*',
+      });
+      const r = await fetch('https://commons.wikimedia.org/w/api.php?' + params);
+      if (!r.ok) continue;
       const j = await r.json();
-      const img = j.originalimage?.source || j.thumbnail?.source;
-      if (img) { log('    "'+wordPT+'" → wiki '+t.lang+': '+(j.title||'')); return await fetchAsDataURL(img); }
+      const pages = j.query?.pages ? Object.values(j.query.pages) : [];
+      const candidates = pages
+        .filter(p => p.imageinfo?.[0])
+        .filter(p => /jpe?g|png|webp/i.test(p.imageinfo[0].mime))
+        .filter(p => (p.imageinfo[0].size || 0) < 15 * 1024 * 1024)
+        .filter(p => !/\.(map|chart|diagram|svg)$/i.test(p.title || ''))
+        .sort((a, b) => (a.index || 0) - (b.index || 0));
+      if (!candidates.length) continue;
+      const pick = candidates[0];
+      const url = pick.imageinfo[0].thumburl || pick.imageinfo[0].url;
+      log('    "'+wordPT+'" → wikimedia: ' + (pick.title || '').replace('File:','').slice(0, 50));
+      return await fetchAsDataURL(url);
     } catch {}
   }
-  throw new Error('wiki sem imagem');
+  throw new Error('wikimedia sem resultado');
+}
+
+async function imageOpenverse(wordPT, wordEN) {
+  const term = wordEN || wordPT;
+  try {
+    const params = new URLSearchParams({ q: term, page_size: '20' });
+    const r = await fetch('https://api.openverse.org/v1/images/?' + params);
+    if (!r.ok) throw new Error('openverse ' + r.status);
+    const j = await r.json();
+    if (!j.results?.length) throw new Error('sem resultado');
+    // Preferir resultados com tag matching e formatos raster
+    const candidates = j.results.filter(it => /jpe?g|png|webp/i.test(it.mature ? '' : (it.url || '')));
+    const list = candidates.length ? candidates : j.results;
+    const pick = list[0];
+    log('    "'+wordPT+'" → openverse: ' + (pick.title || '').slice(0, 50));
+    return await fetchAsDataURL(pick.url || pick.thumbnail);
+  } catch (e) { throw e; }
+}
+
+// Mantido como atalho para compatibilidade (botão Wiki no card)
+async function imageWikipedia(wordPT, wordEN) {
+  return await imageWikimediaCommons(wordPT, wordEN);
 }
 
 async function getImage(word, src, key, wordEN) {
   if (src === 'none') return null;
   if (src === 'auto') {
-    try { return await imageWikipedia(word, wordEN); } catch {}
-    try { return await imagePixabay(word, key, wordEN); } catch (e) { log('  "'+word+'" sem wiki/pix — IA'); }
+    try { return await imageWikimediaCommons(word, wordEN); } catch {}
+    try { return await imagePixabay(word, key, wordEN); } catch {}
+    try { return await imageOpenverse(word, wordEN); } catch { log('  "'+word+'" sem fonte real — IA'); }
     return await imagePollinations(wordEN || word);
   }
   if (src === 'wikipedia') {
