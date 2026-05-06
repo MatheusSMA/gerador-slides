@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Gerador de Slides</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2b6cb0">
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7fb;
+    --card: #fff;
+    --fg: #1a1a1a;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --accent: #2b6cb0;
+    --accent-fg: #fff;
+    --soft: #eef2ff;
+    --danger: #dc2626;
+    --ok: #16a34a;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #181a20; --fg: #e8eaed;
+      --muted: #9aa0a6; --border: #2a2d35; --soft: #1f2530;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; margin: 8px 0 2px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .field { display: block; margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  input[type="text"], input[type="number"], select {
+    width: 100%; font: inherit; font-size: 16px;
+    padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--card); color: var(--fg);
+    transition: border .15s, box-shadow .15s;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .toggle-grp { display: flex; gap: 8px; }
+  .toggle-grp button {
+    flex: 1; font: inherit; font-weight: 600; font-size: 16px;
+    padding: 12px 0; border-radius: 10px; cursor: pointer;
+    background: var(--card); color: var(--fg); border: 1px solid var(--border);
+    transition: all .15s;
+  }
+  .toggle-grp button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .toggle-grp button:active { transform: scale(.97); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 480px) { .row2 { grid-template-columns: 1fr; } }
+  .btn-primary {
+    width: 100%; font: inherit; font-weight: 700; font-size: 17px;
+    padding: 14px 18px; border-radius: 12px; border: none; cursor: pointer;
+    background: var(--accent); color: var(--accent-fg);
+    transition: transform .1s, opacity .15s;
+  }
+  .btn-primary:active { transform: scale(.98); }
+  .btn-primary:disabled { opacity: .5; cursor: wait; }
+  .btn-secondary {
+    font: inherit; font-weight: 600; font-size: 14px;
+    padding: 10px 14px; border-radius: 10px; cursor: pointer;
+    background: var(--soft); color: var(--fg); border: 1px solid var(--border);
+  }
+  .btn-ghost {
+    font: inherit; font-size: 13px; padding: 8px 12px;
+    border-radius: 8px; cursor: pointer;
+    background: transparent; color: var(--accent); border: 1px solid var(--border);
+  }
+  .progress-card { display: none; }
+  .progress-card.show { display: block; }
+  .pbar { height: 10px; background: var(--soft); border-radius: 999px; overflow: hidden; margin: 12px 0 8px; }
+  .pbar > div { height: 100%; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, white)); width: 0; transition: width .3s; }
+  .pmeta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  #log { display: none; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 11px; background: var(--soft); padding: 10px; border-radius: 8px; max-height: 200px; overflow: auto; margin-top: 10px; }
+  #log.show { display: block; }
+  .log-toggle { font-size: 12px; color: var(--muted); margin-top: 8px; cursor: pointer; user-select: none; }
+
+  .preview-card { display: none; }
+  .preview-card.show { display: block; }
+  .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+  @media (max-width: 480px) { .preview-grid { grid-template-columns: 1fr 1fr; gap: 10px; } }
+  .slide-pair {
+    background: var(--soft); border: 1px solid var(--border); border-radius: 12px;
+    padding: 8px; display: flex; flex-direction: column; gap: 6px;
+    position: relative;
+  }
+  .corner-btn {
+    position: absolute; top: 6px; right: 6px;
+    width: 26px; height: 26px; padding: 0;
+    border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(0,0,0,.55); color: #fff;
+    font-size: 13px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2; transition: background .15s;
+  }
+  .corner-btn:hover, .corner-btn:active { background: var(--danger); }
+  .corner-btn.card-rm { top: 4px; right: 4px; background: rgba(220,38,38,.85); }
+  .corner-btn.card-rm:hover { background: var(--danger); }
+  .pv-word, .pv-img {
+    aspect-ratio: 16/9; border-radius: 8px; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; position: relative;
+    border: 1px solid var(--border);
+  }
+  .pv-word span { font-family: "Arial Black", "Arial", sans-serif; font-weight: 900; color: #000; font-size: clamp(14px, 4.2vw, 26px); text-align: center; padding: 0 6px; }
+  .pv-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .pv-img.empty { color: var(--muted); font-size: 12px; }
+  .slide-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .slide-actions button { flex: 1; font-size: 11px; padding: 6px 4px; min-width: 0; white-space: nowrap; }
+  .slide-actions .row-srcs button { background: var(--card); }
+  .slide-actions .row-srcs button:active, .slide-actions .row-srcs button.busy { background: var(--accent); color: var(--accent-fg); }
+  .actions-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .actions-row .btn-primary { flex: 1; min-width: 200px; }
+  .badge { display: inline-block; background: var(--accent); color: var(--accent-fg); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+  .footer { font-size: 12px; color: var(--muted); margin-top: 18px; text-align: center; }
+  .upload-input { display: none; }
+  .pv-img .swap-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,.65); color: #fff;
+    display: none; align-items: center; justify-content: center; font-size: 12px;
+    flex-direction: column; gap: 8px;
+  }
+  .pv-img.replacing .swap-overlay { display: flex; }
+  .spinner {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,.25);
+    border-top-color: #fff;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .swap-overlay .elapsed { font-variant-numeric: tabular-nums; opacity: .85; font-size: 11px; }
+  .swap-overlay .src-tag { font-weight: 700; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gerador de Slides 🎬</h1>
+  <div class="sub">Crie um .pptx por tema com palavra + imagem em cada par de slides.</div>
+
+  <div class="card" id="formCard">
+    <div class="field">
+      <label class="label" for="tema">Tema</label>
+      <input id="tema" type="text" placeholder="cozinha, animais, frutas..." value="cozinha" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label class="label">Quantidade</label>
+      <div class="toggle-grp" id="qtdGrp">
+        <button type="button" data-v="25" class="on">25</button>
+        <button type="button" data-v="50">50</button>
+        <button type="button" data-v="100">100</button>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label class="label" for="fonte">Tamanho da fonte</label>
+        <input id="fonte" type="number" value="72" min="12" max="300" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label class="label" for="lang">Idioma das palavras</label>
+        <select id="lang">
+          <option value="pt">Português</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label class="label" for="imgsrc">Fonte das imagens</label>
+        <select id="imgsrc">
+          <option value="pollinations">Pollinations (IA, catálogo)</option>
+          <option value="wikipedia">Wikipedia (foto enciclopédica)</option>
+          <option value="pixabay">Pixabay (fotos reais)</option>
+          <option value="none">Sem imagens</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="fname">Nome do arquivo</label>
+        <input id="fname" type="text" placeholder="meu-deck" autocomplete="off">
+      </div>
+    </div>
+
+    <button id="go" class="btn-primary">Gerar palavras e imagens</button>
+  </div>
+
+  <div class="card progress-card" id="progressCard">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <strong id="phaseLabel">Iniciando...</strong>
+      <span id="etaLabel" style="font-size: 13px; color: var(--muted);"></span>
+    </div>
+    <div class="pbar"><div id="pbar"></div></div>
+    <div class="pmeta">
+      <span id="progressLabel">0 / 0</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="log-toggle" id="logToggle">▾ ver log técnico</div>
+    <div id="log"></div>
+  </div>
+
+  <div class="card preview-card" id="previewCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 8px;">
+      <strong>Pré-visualização <span class="badge" id="slideCount">0 slides</span></strong>
+      <span style="font-size: 12px; color: var(--muted);">Toque numa imagem para trocar</span>
+    </div>
+    <div class="preview-grid" id="previewGrid"></div>
+
+    <div class="actions-row">
+      <button id="downloadBtn" class="btn-primary">📥 Baixar PPTX</button>
+      <button id="shareBtn" class="btn-secondary" style="display:none;">📤 Compartilhar / Salvar no Drive</button>
+      <button id="resetBtn" class="btn-ghost">↺ Recomeçar</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    Tudo roda no seu navegador. Texto via Pollinations. Imagens via fonte selecionada.
+  </div>
+</div>
+
+<input type="file" id="fileInput" class="upload-input" accept="image/*">
+
+<script>
+const PIXABAY_KEY = '55733113-22d5ff46c22eb109960c0ccee';
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const log = (...a) => { $('log').textContent += '\n' + a.join(' '); $('log').scrollTop = 1e9; };
+const clearLog = () => { $('log').textContent = ''; };
+
+// ---------- Persist ----------
+['tema','fonte','imgsrc','lang','fname'].forEach(id => {
+  const v = localStorage.getItem('ppt_' + id);
+  if (v !== null) $(id).value = v;
+  $(id).addEventListener('input', () => localStorage.setItem('ppt_' + id, $(id).value));
+  $(id).addEventListener('change', () => localStorage.setItem('ppt_' + id, $(id).value));
+});
+
+// ---------- Quantity toggle ----------
+let qtd = parseInt(localStorage.getItem('ppt_qtd') || '25', 10);
+function refreshQtd() {
+  $('qtdGrp').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === qtd));
+}
+$('qtdGrp').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  qtd = +b.dataset.v; localStorage.setItem('ppt_qtd', qtd); refreshQtd();
+});
+refreshQtd();
+
+// ---------- Log toggle ----------
+$('logToggle').addEventListener('click', () => $('log').classList.toggle('show'));
+
+// ---------- Progress ----------
+let progState = { start: 0, done: 0, total: 0 };
+function setPhase(label) { $('phaseLabel').textContent = label; }
+function setProgress(done, total) {
+  progState.done = done; progState.total = total;
+  const pct = total ? Math.round(done / total * 100) : 0;
+  $('pbar').style.width = pct + '%';
+  $('progressLabel').textContent = done + ' / ' + total;
+  $('progressPct').textContent = pct + '%';
+  if (done > 0 && total > done) {
+    const elapsed = (Date.now() - progState.start) / 1000;
+    const remaining = elapsed / done * (total - done);
+    $('etaLabel').textContent = '~' + formatETA(remaining) + ' restantes';
+  } else if (done >= total && total > 0) {
+    $('etaLabel').textContent = '';
+  }
+}
+function formatETA(s) {
+  if (s < 60) return Math.ceil(s) + 's';
+  const m = Math.floor(s / 60), sec = Math.ceil(s % 60);
+  return m + 'm ' + sec + 's';
+}
+function startProgress() { progState.start = Date.now(); setProgress(0, 0); $('etaLabel').textContent = ''; }
+
+// ---------- Pollinations (text) ----------
+async function askPollinations(prompt) {
+  const models = ['openai', 'mistral', 'llama', 'openai-fast'];
+  let wait = 2000;
+  for (let i = 0; i < 8; i++) {
+    const model = models[i % models.length];
+    const seed = Math.floor(Math.random() * 1e9);
+    const url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=' + model + '&seed=' + seed;
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (r.ok) { const t = await r.text(); if (t && t.length > 5) return t; }
+      if (r.status === 429) { log('  rate-limit ('+model+'), '+(wait/1000)+'s...'); await sleep(wait); wait = Math.min(wait*1.7, 20000); continue; }
+      log('  modelo '+model+' '+r.status);
+    } catch (e) { log('  erro rede ('+model+'): '+e.message); await sleep(2000); }
+  }
+  throw new Error('pollinations indisponível');
+}
+
+function parseWordList(txt) {
+  // Try line-by-line first; if too few, try comma-separated as fallback.
+  const cleanLine = s => s.replace(/^[\s\-\d.,)*•·>#"'`\[\]]+/, '').replace(/[.,;:!?"'`\[\]]+$/, '').trim().toLowerCase();
+  const valid = s => s.length > 1 && s.length < 40 && /[a-zà-ú]/i.test(s) && !/[:=<>{}\\\/]/.test(s) && !/^(here|aqui|lista|sure|claro|certo)\b/.test(s);
+  let arr = txt.split(/\r?\n/).map(cleanLine).filter(valid);
+  if (arr.length < 3) {
+    arr = txt.split(/[,;\n]+/).map(cleanLine).filter(valid);
+  }
+  return arr;
+}
+
+async function generateWords(tema, n, lang) {
+  const langName = lang === 'pt' ? 'português' : 'inglês';
+  const sys = 'Você é um gerador de listas de vocabulário. Responde APENAS com a lista pedida, um item por linha, sem numeração, sem pontuação, sem cabeçalho, sem explicação, tudo em letras minúsculas, substantivos concretos no singular.';
+  const out = []; const seen = new Set();
+  let zeros = 0;
+  for (let attempt = 0; attempt < 8 && out.length < n; attempt++) {
+    const faltam = n - out.length;
+    const evite = out.length ? `\nNão repita: ${out.slice(-30).join(', ')}.` : '';
+    const userMsg = `Liste ${faltam} substantivos concretos em ${langName} relacionados ao tema "${tema}". Apenas objetos/itens reais e tangíveis. Um por linha, sem numeração.${evite}`;
+    let txt;
+    try { txt = await askPollinations(sys + '\n\n' + userMsg); }
+    catch (e) { log('  tentativa '+(attempt+1)+' falhou: '+e.message); continue; }
+    const novos = parseWordList(txt); let added = 0;
+    for (const w of novos) { if (!seen.has(w)) { seen.add(w); out.push(w); added++; } if (out.length >= n) break; }
+    log('  tentativa '+(attempt+1)+': +'+added+' (total '+out.length+'/'+n+')');
+    if (added === 0) {
+      log('    resposta crua: ' + JSON.stringify(txt.slice(0, 200)));
+      zeros++;
+      if (zeros >= 3) break;
+    } else { zeros = 0; }
+    setProgress(out.length, n);
+  }
+  return out.slice(0, n);
+}
+
+async function translateWordsToEN(words) {
+  const prompt = `Traduza cada palavra portuguesa abaixo para uma única palavra em inglês (substantivo concreto, singular, minúscula). Responda APENAS com as traduções, uma por linha, na MESMA ORDEM. Sem numeração, sem explicação.\n\n${words.join('\n')}`;
+  try {
+    const txt = await askPollinations(prompt);
+    const lines = txt.split('\n')
+      .map(s => s.replace(/^[\s\-\d.,)*•·>#"'`]+/, '').replace(/[.,;:!?"'`]+$/, '').trim().toLowerCase())
+      .filter(s => s && /^[a-z][a-z\s-]{1,30}$/.test(s));
+    if (lines.length >= words.length) return lines.slice(0, words.length);
+    return words.map((w, i) => lines[i] || w);
+  } catch { return words.slice(); }
+}
+
+// ---------- Image fetch ----------
+async function fetchAsDataURL(url, retries = 4) {
+  let wait = 3000;
+  for (let i = 0; i <= retries; i++) {
+    const r = await fetch(url);
+    if (r.ok) {
+      const blob = await r.blob();
+      return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+    }
+    if (r.status === 429 && i < retries) { log('    img 429, '+(wait/1000)+'s...'); await sleep(wait); wait = Math.min(wait*2, 30000); continue; }
+    throw new Error('img http ' + r.status);
+  }
+  throw new Error('img http 429');
+}
+
+async function pixabaySearch(key, q, opts = {}) {
+  const params = new URLSearchParams({ key, q, image_type: 'photo', safesearch: 'true', per_page: '30', ...opts });
+  const r = await fetch('https://pixabay.com/api/?' + params.toString());
+  if (!r.ok) throw new Error('pixabay ' + r.status);
+  const j = await r.json(); return j.hits || [];
+}
+
+function rankHits(word, hits) {
+  const w = word.toLowerCase();
+  return hits.slice().sort((a, b) => {
+    const score = h => {
+      const tags = (h.tags || '').toLowerCase(); let s = 0;
+      if (tags.includes(w)) s += 5;
+      if (tags.includes('white')) s += 3;
+      if (tags.includes('isolated')) s += 4;
+      if (tags.includes('studio')) s += 2;
+      if (tags.includes('background')) s += 1;
+      if (/icon|illustration|vector|clipart|drawing|cartoon/.test(tags)) s -= 6;
+      const ratio = h.imageWidth / h.imageHeight;
+      if (ratio > 0.7 && ratio < 1.6) s += 1;
+      return s;
+    };
+    return score(b) - score(a);
+  });
+}
+
+function tagsContain(hit, term) {
+  const tags = (hit.tags || '').toLowerCase();
+  return term.split(/\s+/).some(t => t.length > 2 && tags.includes(t));
+}
+
+async function imagePixabay(wordPT, key, wordEN) {
+  const en = wordEN || wordPT;
+  const tries = [
+    { q: en, opts: { lang: 'en', colors: 'white' }, label: 'en+white', requireMatch: true },
+    { q: en, opts: { lang: 'en' },                  label: 'en',       requireMatch: true },
+    { q: wordPT, opts: { lang: 'pt', colors: 'white' }, label: 'pt+white', requireMatch: false },
+    { q: wordPT, opts: { lang: 'pt' },              label: 'pt',       requireMatch: false },
+    { q: en, opts: { lang: 'en' },                  label: 'en-loose', requireMatch: false },
+  ];
+  for (const t of tries) {
+    let hits;
+    try { hits = await pixabaySearch(key, t.q, t.opts); } catch (e) { continue; }
+    if (!hits.length) continue;
+    if (t.requireMatch) { hits = hits.filter(h => tagsContain(h, t.q)); if (!hits.length) continue; }
+    const pick = rankHits(en, hits)[0];
+    log('    "'+wordPT+'" → '+(pick.tags||'').slice(0,60)+' ['+t.label+']');
+    return await fetchAsDataURL(pick.largeImageURL || pick.webformatURL);
+  }
+  throw new Error('sem resultado');
+}
+
+async function imagePollinations(word) {
+  const prompt = `professional product catalog photography of a single ${word}, isolated on pure white background, ecommerce style, soft even studio lighting, no shadow, centered, full object visible, no text, no watermark, no logo, no people, no hands, photorealistic, high detail`;
+  const negative = 'cartoon,illustration,drawing,icon,sketch,painting,multiple objects,collage,text,watermark,logo,hands,people';
+  const base = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=1024&height=1024&nologo=true&enhance=true&negative=' + encodeURIComponent(negative);
+  let wait = 2500;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const u = base + '&seed=' + Math.floor(Math.random() * 1e9);
+    try {
+      const r = await fetch(u, { cache: 'no-store' });
+      if (r.ok) {
+        const blob = await r.blob();
+        return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+      }
+      if (r.status === 429) {
+        log('    pollinations img 429, novo seed em ' + (wait/1000) + 's...');
+        await sleep(wait); wait = Math.min(wait * 1.7, 18000); continue;
+      }
+      throw new Error('pollinations img ' + r.status);
+    } catch (e) {
+      if (attempt === 4) throw e;
+      await sleep(wait);
+    }
+  }
+  throw new Error('pollinations img falhou');
+}
+
+async function imageWikipedia(wordPT, wordEN) {
+  const tries = [{ lang: 'en', term: wordEN || wordPT }, { lang: 'pt', term: wordPT }];
+  for (const t of tries) {
+    if (!t.term) continue;
+    try {
+      const u = `https://${t.lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t.term.replace(/\s+/g,'_'))}`;
+      const r = await fetch(u); if (!r.ok) continue;
+      const j = await r.json();
+      const img = j.originalimage?.source || j.thumbnail?.source;
+      if (img) { log('    "'+wordPT+'" → wiki '+t.lang+': '+(j.title||'')); return await fetchAsDataURL(img); }
+    } catch {}
+  }
+  throw new Error('wiki sem imagem');
+}
+
+async function getImage(word, src, key, wordEN) {
+  if (src === 'none') return null;
+  if (src === 'wikipedia') {
+    try { return await imageWikipedia(word, wordEN); }
+    catch { log('  wiki falhou para "'+word+'" — Pollinations'); return await imagePollinations(wordEN || word); }
+  }
+  if (src === 'pixabay') {
+    try { return await imagePixabay(word, key, wordEN); }
+    catch (e) { log('  pixabay falhou para "'+word+'": '+e.message+' — Pollinations'); return await imagePollinations(wordEN || word); }
+  }
+  return await imagePollinations(wordEN || word);
+}
+
+async function pool(items, worker, concurrency, onItemDone) {
+  const results = new Array(items.length);
+  let i = 0, completed = 0;
+  await Promise.all(Array.from({length: concurrency}, async () => {
+    while (true) {
+      const idx = i++;
+      if (idx >= items.length) return;
+      try { results[idx] = await worker(items[idx], idx); }
+      catch (e) { results[idx] = { error: e.message }; }
+      completed++;
+      onItemDone?.(completed, items.length);
+    }
+  }));
+  return results;
+}
+
+// ---------- State ----------
+const state = {
+  words: [],     // [{ pt, en, image: dataURL|null }]
+  fontSize: 72,
+  filename: 'deck',
+};
+
+// ---------- Render preview ----------
+function renderPreview() {
+  const grid = $('previewGrid'); grid.innerHTML = '';
+  state.words.forEach((it, idx) => {
+    const card = document.createElement('div'); card.className = 'slide-pair';
+    card.innerHTML = `
+      <button class="corner-btn card-rm" data-act="rmall" data-idx="${idx}" title="Remover este item">🗑</button>
+      <div class="pv-word"><span>${escapeHtml(it.pt)}</span></div>
+      <div class="pv-img ${it.image ? '' : 'empty'}" data-idx="${idx}">
+        ${it.image ? `<img src="${it.image}" alt="">` : 'sem imagem'}
+        ${it.image ? `<button class="corner-btn" data-act="rmimg" data-idx="${idx}" title="Remover imagem">✕</button>` : ''}
+        <div class="swap-overlay">
+          <div class="spinner"></div>
+          <div class="src-tag">buscando...</div>
+          <div class="elapsed">0s</div>
+        </div>
+      </div>
+      <div class="slide-actions row-srcs">
+        <button class="btn-secondary" data-act="src-pollinations" data-idx="${idx}" title="Gerar com IA">🤖 IA</button>
+        <button class="btn-secondary" data-act="src-wikipedia"   data-idx="${idx}" title="Buscar Wikipedia">📚 Wiki</button>
+        <button class="btn-secondary" data-act="src-pixabay"     data-idx="${idx}" title="Buscar Pixabay">📷 Pix</button>
+      </div>
+      <div class="slide-actions">
+        <button class="btn-secondary" data-act="search" data-idx="${idx}" title="Abrir Google Imagens">🔍 Google</button>
+        <button class="btn-secondary" data-act="paste"  data-idx="${idx}" title="Colar imagem">📋 Colar</button>
+        <button class="btn-secondary" data-act="upload" data-idx="${idx}" title="Upload do dispositivo">📁 Upload</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+  $('slideCount').textContent = (state.words.length * 2 - state.words.filter(w => !w.image).length) + ' slides';
+}
+
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+// ---------- Image replace ----------
+let pendingIdx = null;
+const SRC_LABEL = { pollinations: 'IA gerando', wikipedia: 'buscando Wiki', pixabay: 'buscando Pixabay' };
+
+async function refetchFromSource(idx, src) {
+  const it = state.words[idx];
+  const card = $('previewGrid').children[idx];
+  if (!card) return;
+  const imgWrap = card.querySelector('.pv-img');
+  const buttons = card.querySelectorAll('button');
+  buttons.forEach(b => b.disabled = true);
+  const srcBtn = card.querySelector(`button[data-act="src-${src}"]`);
+  srcBtn?.classList.add('busy');
+  imgWrap.classList.add('replacing');
+  const tagEl = imgWrap.querySelector('.src-tag');
+  const elEl = imgWrap.querySelector('.elapsed');
+  if (tagEl) tagEl.textContent = SRC_LABEL[src] || 'buscando...';
+  const t0 = Date.now();
+  if (elEl) elEl.textContent = '0s';
+  const tick = setInterval(() => {
+    if (!elEl) return;
+    const s = Math.floor((Date.now() - t0) / 1000);
+    elEl.textContent = s + 's' + (s > 15 ? ' (IA pode demorar)' : '');
+  }, 250);
+  try {
+    const img = await getImage(it.pt, src, PIXABAY_KEY, it.en);
+    if (typeof img === 'string') {
+      it.image = img;
+      renderPreview();
+    } else {
+      alert('Não consegui buscar imagem dessa fonte para "' + it.pt + '".');
+    }
+  } catch (e) {
+    alert('Erro buscando "' + it.pt + '" em ' + src + ': ' + e.message);
+  } finally {
+    clearInterval(tick);
+    buttons.forEach(b => b.disabled = false);
+    srcBtn?.classList.remove('busy');
+    imgWrap.classList.remove('replacing');
+  }
+}
+
+async function pasteImageToSlot(idx) {
+  if (!navigator.clipboard || !navigator.clipboard.read) {
+    alert('Seu navegador não permite ler a área de transferência. Use o botão Upload.');
+    return;
+  }
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imgType = item.types.find(t => t.startsWith('image/'));
+      if (imgType) {
+        const blob = await item.getType(imgType);
+        const dataUrl = await new Promise((res, rej) => {
+          const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob);
+        });
+        state.words[idx].image = dataUrl;
+        renderPreview();
+        return;
+      }
+    }
+    alert('Nenhuma imagem na área de transferência. Copie uma imagem primeiro (segurar no celular → Copiar).');
+  } catch (e) {
+    alert('Não foi possível ler a área de transferência: ' + e.message + '\n\nDica: o navegador pode pedir permissão na primeira vez.');
+  }
+}
+
+$('previewGrid').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const idx = +b.dataset.idx; const it = state.words[idx];
+  const act = b.dataset.act;
+  if (act === 'search') {
+    const term = it.en || it.pt;
+    const url = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(term + ' isolated white background');
+    window.open(url, '_blank');
+  } else if (act === 'upload') {
+    pendingIdx = idx;
+    $('fileInput').click();
+  } else if (act === 'paste') {
+    pasteImageToSlot(idx);
+  } else if (act === 'rmimg') {
+    it.image = null; renderPreview();
+  } else if (act === 'rmall') {
+    state.words.splice(idx, 1); renderPreview();
+  } else if (act.startsWith('src-')) {
+    refetchFromSource(idx, act.slice(4));
+  }
+});
+
+$('fileInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f || pendingIdx === null) return;
+  const fr = new FileReader();
+  fr.onload = () => { state.words[pendingIdx].image = fr.result; pendingIdx = null; renderPreview(); };
+  fr.readAsDataURL(f);
+});
+
+// ---------- Build PPTX ----------
+async function buildPptx() {
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE';
+  const W = 13.333, H = 7.5;
+  for (const it of state.words) {
+    const sa = pptx.addSlide(); sa.background = { color: 'FFFFFF' };
+    sa.addText(it.pt, {
+      x: 0, y: 0, w: W, h: H,
+      fontFace: 'Arial Black', fontSize: state.fontSize, color: '000000',
+      bold: true, align: 'center', valign: 'middle',
+    });
+    if (it.image && it.image.startsWith('data:')) {
+      const sb = pptx.addSlide(); sb.background = { color: 'FFFFFF' };
+      const iw = 10, ih = 6;
+      sb.addImage({ data: it.image, x: (W-iw)/2, y: (H-ih)/2, w: iw, h: ih, sizing: { type: 'contain', w: iw, h: ih } });
+    }
+  }
+  return pptx;
+}
+
+function safeFilename() {
+  const raw = ($('fname').value || $('tema').value || 'deck').trim();
+  return raw.replace(/[^a-z0-9_\-\s]/gi, '').replace(/\s+/g, '_').slice(0, 60) || 'deck';
+}
+
+async function downloadPptx() {
+  const pptx = await buildPptx();
+  await pptx.writeFile({ fileName: safeFilename() + '.pptx' });
+}
+
+async function sharePptx() {
+  const pptx = await buildPptx();
+  const blob = await pptx.write({ outputType: 'blob' });
+  const file = new File([blob], safeFilename() + '.pptx', { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    await navigator.share({ files: [file], title: safeFilename() });
+  } else {
+    alert('Compartilhamento não disponível neste navegador. Baixe e envie manualmente.');
+  }
+}
+
+// ---------- Main flow ----------
+$('go').addEventListener('click', async () => {
+  const tema = $('tema').value.trim();
+  const fontSize = parseInt($('fonte').value, 10);
+  const imgsrc = $('imgsrc').value;
+  const lang = $('lang').value;
+  if (!tema) return alert('Informe um tema');
+  if (!$('fname').value.trim()) $('fname').value = tema.toLowerCase().replace(/\s+/g,'-');
+
+  state.fontSize = fontSize;
+  state.words = [];
+  $('go').disabled = true;
+  $('progressCard').classList.add('show');
+  $('previewCard').classList.remove('show');
+  clearLog();
+  startProgress();
+
+  setPhase('Gerando palavras...');
+  let words;
+  try {
+    words = await generateWords(tema, qtd, lang);
+    log('Recebidas ' + words.length + ' palavras.');
+  } catch (e) { log('ERRO: ' + e.message); $('go').disabled = false; return; }
+  setProgress(words.length, words.length);
+
+  let wordsEN = words;
+  if (imgsrc !== 'none' && lang === 'pt') {
+    setPhase('Traduzindo para busca...');
+    wordsEN = await translateWordsToEN(words);
+  }
+
+  state.words = words.map((w, i) => ({ pt: w, en: wordsEN[i], image: null }));
+
+  if (imgsrc !== 'none') {
+    setPhase('Buscando imagens...');
+    progState.start = Date.now(); setProgress(0, words.length);
+    const concurrency = imgsrc === 'pollinations' ? 1 : (imgsrc === 'wikipedia' ? 4 : 3);
+    await pool(words, async (w, i) => {
+      log('  ['+(i+1)+'/'+words.length+'] '+w);
+      const img = await getImage(w, imgsrc, PIXABAY_KEY, wordsEN[i]);
+      state.words[i].image = (typeof img === 'string') ? img : null;
+    }, concurrency, (done, total) => setProgress(done, total));
+  }
+
+  setPhase('Pronto ✓');
+  setProgress(words.length, words.length);
+  renderPreview();
+  $('previewCard').classList.add('show');
+  $('previewCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('go').disabled = false;
+
+  // Show share button if supported
+  try {
+    const dummyFile = new File([new Blob(['x'])], 'x.pptx', { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    if (navigator.canShare && navigator.canShare({ files: [dummyFile] })) {
+      $('shareBtn').style.display = 'inline-block';
+    }
+  } catch {}
+});
+
+$('downloadBtn').addEventListener('click', async () => {
+  $('downloadBtn').disabled = true; $('downloadBtn').textContent = 'Gerando...';
+  try { await downloadPptx(); $('downloadBtn').textContent = '✓ Baixado'; }
+  catch (e) { alert('Erro: ' + e.message); $('downloadBtn').textContent = '📥 Baixar PPTX'; }
+  setTimeout(() => { $('downloadBtn').disabled = false; $('downloadBtn').textContent = '📥 Baixar PPTX'; }, 1500);
+});
+
+$('shareBtn').addEventListener('click', async () => {
+  $('shareBtn').disabled = true; $('shareBtn').textContent = 'Preparando...';
+  try { await sharePptx(); }
+  catch (e) { /* user cancelled or unsupported */ }
+  $('shareBtn').disabled = false; $('shareBtn').textContent = '📤 Compartilhar / Salvar no Drive';
+});
+
+$('resetBtn').addEventListener('click', () => {
+  $('previewCard').classList.remove('show');
+  $('progressCard').classList.remove('show');
+  state.words = [];
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+</script>
+</body>
+</html>
