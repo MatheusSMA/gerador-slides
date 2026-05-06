@@ -400,16 +400,36 @@ async function generateWords(tema, n, lang) {
   return out.slice(0, n);
 }
 
-async function translateWordsToEN(words) {
-  const prompt = `Traduza cada palavra portuguesa abaixo para uma única palavra em inglês (substantivo concreto, singular, minúscula). Responda APENAS com as traduções, uma por linha, na MESMA ORDEM. Sem numeração, sem explicação.\n\n${words.join('\n')}`;
+async function translateWithTheme(tema, words) {
+  // Inclui o tema como primeiro item; depois separa
+  const all = [tema, ...words];
+  const prompt = `Contexto/tema do vocabulário: "${tema}".
+
+Traduza cada termo abaixo do português para uma expressão em inglês ADEQUADA AO CONTEXTO. Use 1-3 palavras quando precisar desambiguar.
+
+Exemplos:
+- "panela" no tema "cozinha" → "cooking pot" (NÃO apenas "pot", que é gíria de maconha)
+- "rato" no tema "animais" → "rat" (NÃO "mouse" do computador)
+- "morcego" no tema "beisebol" → "baseball bat" (NÃO "bat" o animal)
+- "tela" no tema "informática" → "computer screen"
+
+Responda APENAS com as traduções, uma por linha, na MESMA ORDEM dos itens, em letras minúsculas, sem numeração, sem explicação.
+
+${all.join('\n')}`;
   try {
     const txt = await askPollinations(prompt);
     const lines = txt.split('\n')
       .map(s => s.replace(/^[\s\-\d.,)*•·>#"'`]+/, '').replace(/[.,;:!?"'`]+$/, '').trim().toLowerCase())
-      .filter(s => s && /^[a-z][a-z\s-]{1,30}$/.test(s));
-    if (lines.length >= words.length) return lines.slice(0, words.length);
-    return words.map((w, i) => lines[i] || w);
-  } catch { return words.slice(); }
+      .filter(s => s && /^[a-z][a-z\s-]{1,40}$/.test(s));
+    if (lines.length >= all.length) {
+      return { themeEN: lines[0], wordsEN: lines.slice(1, all.length) };
+    }
+    // Tradução parcial — usa o que veio, completa com original
+    const padded = all.map((x, i) => lines[i] || x);
+    return { themeEN: padded[0], wordsEN: padded.slice(1) };
+  } catch {
+    return { themeEN: tema, wordsEN: words.slice() };
+  }
 }
 
 // ---------- Image fetch ----------
@@ -505,8 +525,9 @@ async function imagePollinations(word) {
   throw new Error('pollinations img falhou');
 }
 
-async function imageWikimediaCommons(wordPT, wordEN) {
+async function imageWikimediaCommons(wordPT, wordEN, themeEN) {
   const queries = [];
+  if (wordEN && wordEN !== wordPT) queries.push(wordEN + (themeEN ? ' ' + themeEN : ''));
   if (wordEN && wordEN !== wordPT) queries.push(wordEN);
   if (wordPT) queries.push(wordPT);
   for (const q of queries) {
@@ -560,27 +581,27 @@ async function imageOpenverse(wordPT, wordEN) {
 }
 
 // Mantido como atalho para compatibilidade (botão Wiki no card)
-async function imageWikipedia(wordPT, wordEN) {
-  return await imageWikimediaCommons(wordPT, wordEN);
+async function imageWikipedia(wordPT, wordEN, themeEN) {
+  return await imageWikimediaCommons(wordPT, wordEN, themeEN);
 }
 
-async function getImage(word, src, key, wordEN) {
+async function getImage(word, src, key, wordEN, themeEN) {
   if (src === 'none') return null;
   if (src === 'auto') {
-    try { return await imageWikimediaCommons(word, wordEN); } catch {}
+    try { return await imageWikimediaCommons(word, wordEN, themeEN); } catch {}
     try { return await imagePixabay(word, key, wordEN); } catch {}
     try { return await imageOpenverse(word, wordEN); } catch { log('  "'+word+'" sem fonte real — IA'); }
-    return await imagePollinations(wordEN || word);
+    return await imagePollinations((wordEN || word) + (themeEN ? ' ' + themeEN : ''));
   }
   if (src === 'wikipedia') {
-    try { return await imageWikipedia(word, wordEN); }
-    catch { log('  wiki falhou para "'+word+'" — Pollinations'); return await imagePollinations(wordEN || word); }
+    try { return await imageWikipedia(word, wordEN, themeEN); }
+    catch { log('  wiki falhou para "'+word+'" — Pollinations'); return await imagePollinations((wordEN || word) + (themeEN ? ' ' + themeEN : '')); }
   }
   if (src === 'pixabay') {
     try { return await imagePixabay(word, key, wordEN); }
-    catch (e) { log('  pixabay falhou para "'+word+'": '+e.message+' — Pollinations'); return await imagePollinations(wordEN || word); }
+    catch (e) { log('  pixabay falhou para "'+word+'": '+e.message+' — Pollinations'); return await imagePollinations((wordEN || word) + (themeEN ? ' ' + themeEN : '')); }
   }
-  return await imagePollinations(wordEN || word);
+  return await imagePollinations((wordEN || word) + (themeEN ? ' ' + themeEN : ''));
 }
 
 async function pool(items, worker, concurrency, onItemDone) {
@@ -604,6 +625,7 @@ const state = {
   words: [],     // [{ pt, en, image: dataURL|null }]
   fontSize: 72,
   filename: 'deck',
+  themeEN: '',
 };
 
 // ---------- Render preview ----------
@@ -666,7 +688,7 @@ async function refetchFromSource(idx, src) {
     elEl.textContent = s + 's' + (s > 15 ? ' (IA pode demorar)' : '');
   }, 250);
   try {
-    const img = await getImage(it.pt, src, PIXABAY_KEY, it.en);
+    const img = await getImage(it.pt, src, PIXABAY_KEY, it.en, state.themeEN);
     if (typeof img === 'string') {
       it.image = img;
       renderPreview();
@@ -936,11 +958,15 @@ $('go').addEventListener('click', async () => {
   setProgress(words.length, words.length);
 
   let wordsEN = words;
+  let themeEN = '';
   if (imgsrc !== 'none' && lang === 'pt') {
-    setPhase('Traduzindo para busca...');
-    wordsEN = await translateWordsToEN(words);
+    setPhase('Traduzindo (com contexto do tema)...');
+    const tr = await translateWithTheme(tema, words);
+    wordsEN = tr.wordsEN;
+    themeEN = tr.themeEN;
+    log('  tema "' + tema + '" → "' + themeEN + '"');
   }
-
+  state.themeEN = themeEN;
   state.words = words.map((w, i) => ({ pt: w, en: wordsEN[i], image: null }));
 
   if (imgsrc !== 'none') {
@@ -948,8 +974,8 @@ $('go').addEventListener('click', async () => {
     progState.start = Date.now(); setProgress(0, words.length);
     const concurrency = imgsrc === 'pollinations' ? 3 : (imgsrc === 'wikipedia' || imgsrc === 'auto' ? 4 : 3);
     await pool(words, async (w, i) => {
-      log('  ['+(i+1)+'/'+words.length+'] '+w);
-      const img = await getImage(w, imgsrc, PIXABAY_KEY, wordsEN[i]);
+      log('  ['+(i+1)+'/'+words.length+'] '+w+' ('+wordsEN[i]+')');
+      const img = await getImage(w, imgsrc, PIXABAY_KEY, wordsEN[i], themeEN);
       state.words[i].image = (typeof img === 'string') ? img : null;
     }, concurrency, (done, total) => setProgress(done, total));
   }
