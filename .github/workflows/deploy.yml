@@ -1,0 +1,48 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inject Pollinations token
+        env:
+          POLLINATIONS_TOKEN: ${{ secrets.POLLINATIONS_TOKEN }}
+        run: |
+          if [ -z "$POLLINATIONS_TOKEN" ]; then
+            echo "POLLINATIONS_TOKEN secret not set"; exit 1
+          fi
+          # Substitui placeholder no HTML
+          python3 -c "
+          import os
+          tok = os.environ['POLLINATIONS_TOKEN']
+          with open('index.html', 'r', encoding='utf-8') as f: html = f.read()
+          html = html.replace('__POLLINATIONS_TOKEN__', tok)
+          with open('index.html', 'w', encoding='utf-8') as f: f.write(html)
+          print('Token injetado.')
+          "
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - id: deployment
+        uses: actions/deploy-pages@v4

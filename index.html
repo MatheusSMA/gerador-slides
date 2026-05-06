@@ -339,8 +339,11 @@ function startProgress() { progState.start = Date.now(); setProgress(0, 0); $('e
 
 // ---------- Pollinations (text) ----------
 const POLLINATIONS_REFERRER = 'gerador-slides';
+const POLLINATIONS_INJECTED = '__POLLINATIONS_TOKEN__';
 function polAuthSuffix() {
-  const t = ($('poltoken').value || '').trim();
+  const userTok = ($('poltoken').value || '').trim();
+  const injected = (POLLINATIONS_INJECTED.startsWith('sk_') || POLLINATIONS_INJECTED.startsWith('pk_')) ? POLLINATIONS_INJECTED : '';
+  const t = userTok || injected;
   return t ? ('&token=' + encodeURIComponent(t) + '&referrer=' + POLLINATIONS_REFERRER) : ('&referrer=' + POLLINATIONS_REFERRER);
 }
 
