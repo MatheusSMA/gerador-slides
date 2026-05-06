@@ -326,13 +326,15 @@ function formatETA(s) {
 function startProgress() { progState.start = Date.now(); setProgress(0, 0); $('etaLabel').textContent = ''; }
 
 // ---------- Pollinations (text) ----------
+const POLLINATIONS_REFERRER = 'gerador-slides';
+
 async function askPollinations(prompt) {
   const models = ['openai', 'mistral', 'llama', 'openai-fast'];
   let wait = 2000;
   for (let i = 0; i < 8; i++) {
     const model = models[i % models.length];
     const seed = Math.floor(Math.random() * 1e9);
-    const url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=' + model + '&seed=' + seed;
+    const url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?model=' + model + '&seed=' + seed + '&referrer=' + POLLINATIONS_REFERRER;
     try {
       const r = await fetch(url, { cache: 'no-store' });
       if (r.ok) { const t = await r.text(); if (t && t.length > 5) return t; }
@@ -461,7 +463,7 @@ async function imagePixabay(wordPT, key, wordEN) {
 async function imagePollinations(word) {
   const prompt = `product catalog photo of a single ${word}, isolated on pure white background, studio lighting, centered, no text, no watermark, no people, photorealistic`;
   const negative = 'cartoon,illustration,drawing,icon,sketch,painting,collage,text,watermark,logo,hands,people';
-  const base = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=768&height=768&nologo=true&negative=' + encodeURIComponent(negative);
+  const base = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(prompt) + '?width=768&height=768&nologo=true&referrer=' + POLLINATIONS_REFERRER + '&negative=' + encodeURIComponent(negative);
   let wait = 2500;
   for (let attempt = 0; attempt < 5; attempt++) {
     const u = base + '&seed=' + Math.floor(Math.random() * 1e9);
