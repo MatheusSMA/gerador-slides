@@ -364,10 +364,28 @@ async function askPollinations(prompt) {
   throw new Error('pollinations indisponível');
 }
 
-function parseWordList(txt) {
-  // Try line-by-line first; if too few, try comma-separated as fallback.
+const META_PATTERNS = [
+  /^(um|uma) (item|palavra|coisa)/i,
+  /^sem (numera|pontua|cabe|explica|repet)/i,
+  /^(tudo|todas?|todos?) (em |as |os |no )?(letras?|caract|minúsc|maiúsc)/i,
+  /^(no |without )(numbering|punctuation|explanation|header|repeat)/i,
+  /^(only|just|apenas|somente)/i,
+  /\b(prompt|instru|format|response|resposta|exemplo|example)\b/i,
+  /^(here|aqui|lista|list|sure|claro|certo|ok|certainly|of course)/i,
+  /^(item|palavra|word)\s*\d*$/i,
+  /\b(letras minúsculas|lower case|lowercase|singular|plural|substantivo|noun)\b/i,
+  /^[a-z]+\s[a-z]+\s[a-z]+\s[a-z]+/i, // 4+ palavras sem ser composto comum, provável instrução
+];
+
+function looksLikeMeta(s, tema) {
+  if (META_PATTERNS.some(p => p.test(s))) return true;
+  if (tema && s.toLowerCase().includes(tema.toLowerCase())) return true; // ex.: "tema cozinha"
+  return false;
+}
+
+function parseWordList(txt, tema) {
   const cleanLine = s => s.replace(/^[\s\-\d.,)*•·>#"'`\[\]]+/, '').replace(/[.,;:!?"'`\[\]]+$/, '').trim().toLowerCase();
-  const valid = s => s.length > 1 && s.length < 40 && /[a-zà-ú]/i.test(s) && !/[:=<>{}\\\/]/.test(s) && !/^(here|aqui|lista|sure|claro|certo)\b/.test(s);
+  const valid = s => s.length > 1 && s.length < 40 && /[a-zà-ú]/i.test(s) && !/[:=<>{}\\\/]/.test(s) && !looksLikeMeta(s, tema);
   let arr = txt.split(/\r?\n/).map(cleanLine).filter(valid);
   if (arr.length < 3) {
     arr = txt.split(/[,;\n]+/).map(cleanLine).filter(valid);
@@ -387,7 +405,7 @@ async function generateWords(tema, n, lang) {
     let txt;
     try { txt = await askPollinations(sys + '\n\n' + userMsg); }
     catch (e) { log('  tentativa '+(attempt+1)+' falhou: '+e.message); continue; }
-    const novos = parseWordList(txt); let added = 0;
+    const novos = parseWordList(txt, tema); let added = 0;
     for (const w of novos) { if (!seen.has(w)) { seen.add(w); out.push(w); added++; } if (out.length >= n) break; }
     log('  tentativa '+(attempt+1)+': +'+added+' (total '+out.length+'/'+n+')');
     if (added === 0) {
